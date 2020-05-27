@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 	uint16_t pid = 0;
 	int skip = 0;
 	int pad = 0;
-	size_t pes_len = 0;
+	ssize_t pes_len = -1;
 	int c;
 	int option_index;
 	static struct option long_options[] = {
@@ -222,6 +222,7 @@ int main(int argc, char *argv[])
 		if(counter != 0xFF && counter != (pkt[3] & 0x0F))
 		{
 			fprintf(stderr, "Continuity counter interruption %d != %d\n", pkt[3] & 0x0F, counter);
+			pes_len = -1;
 		}
 		
 		if(verbose)
@@ -285,18 +286,25 @@ int main(int argc, char *argv[])
 		
 		if((pkt[1] >> 6) & 1)
 		{
-			_parse_pes(pes, pes_len);
+			if(pes_len > 0)
+			{
+				_parse_pes(pes, pes_len);
+			}
+			
 			pes_len = 0;
 		}
 		
-		if(pes_len + payload_len >= 1024 * 2)
+		if(pes_len >= 0)
 		{
-			fprintf(stderr, "PES packet too large\n");
-			return(-1);
+			if(pes_len + payload_len >= 1024 * 2)
+			{
+				fprintf(stderr, "PES packet too large\n");
+				return(-1);
+			}
+			
+			memcpy(&pes[pes_len], payload, payload_len);
+			pes_len += payload_len;
 		}
-		
-		memcpy(&pes[pes_len], payload, payload_len);
-		pes_len += payload_len;
 		
 		counter = (pkt[3] + ((pkt[3] >> 4) & 1)) & 0x0F;
 		
