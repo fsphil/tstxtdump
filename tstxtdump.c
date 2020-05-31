@@ -62,6 +62,20 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 			fprintf(stderr, "        PES header length: %d\n", pes[8]);
 		}
 		
+		/* Validate the start code */
+		if(pes[0] != 0x00 || pes[1] != 0x00 || pes[2] != 0x01)
+		{
+			fprintf(stderr, "Invalid Packet start code prefix 0x%02X%02X%02X - skipping PES packet\n", pes[0], pes[1], pes[2]);
+			return;
+		}
+		
+		/* Validate the stream ID */
+		if(pes[3] != 0xBD)
+		{
+			fprintf(stderr, "Invalid Stream id 0x%02X - skipping PES packet\n", pes[3]);
+			return;
+		}
+		
 		data = &pes[8 + pes[8] + 1];
 		data_len = ((pes[4] << 8) | pes[5]) - pes[8] - 3;
 		
@@ -69,6 +83,13 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 		{
 			fprintf(stderr, "data_len = %ld\n", data_len);
 			fprintf(stderr, "data_identifier: %02X\n", data[0]);
+		}
+		
+		/* Validate the length */
+		if(data_len > pes_len)
+		{
+			fprintf(stderr, "Invalid PES Packet length: %ld\n", data_len);
+			return;
 		}
 		
 		data_len -= 1;
@@ -130,7 +151,7 @@ int main(int argc, char *argv[])
 	uint8_t pkt[188], *payload;
 	uint8_t payload_len;
 	uint8_t counter = 0xFF;
-	uint8_t pes[1024 * 2];
+	uint8_t pes[1024 * 4];
 	uint16_t pid = 0;
 	int skip = 0;
 	int pad = 0;
@@ -296,7 +317,7 @@ int main(int argc, char *argv[])
 		
 		if(pes_len >= 0)
 		{
-			if(pes_len + payload_len >= 1024 * 2)
+			if(pes_len + payload_len >= 1024 * 4)
 			{
 				fprintf(stderr, "PES packet too large\n");
 				return(-1);
