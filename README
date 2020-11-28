@@ -14,11 +14,6 @@ EXAMPLES
 
 $ tstxtdump -p 0x13F0 erste.ts erste.t42
 
-Some TS streams prefix each packet with a 4 byte timestamp.
-Use the skip and pad options to work around this:
-
-$ tstxtdump -p 0x13EF -P 4 -S 4 stream.ts stream.t42
-
 
 -Philip Heron <phil@sanslogic.co.uk>
 
