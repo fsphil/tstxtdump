@@ -24,6 +24,7 @@
 FILE *fout = NULL;
 int verbose = 0;
 int olines = 0;
+int errors = 0;
 
 static uint8_t _rev8(uint8_t b)
 {
@@ -40,7 +41,7 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 	
 	while(pes_len)
 	{
-		if(verbose)
+		if(verbose >= 2)
 		{
 			fprintf(stderr, " Packet start code prefix: 0x%02X%02X%02X\n", pes[0], pes[1], pes[2]);
 			fprintf(stderr, "                Stream id: 0x%02X\n", pes[3]);
@@ -65,21 +66,29 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 		/* Validate the start code */
 		if(pes[0] != 0x00 || pes[1] != 0x00 || pes[2] != 0x01)
 		{
-			fprintf(stderr, "Invalid Packet start code prefix 0x%02X%02X%02X - skipping PES packet\n", pes[0], pes[1], pes[2]);
+			if(verbose >= 1)
+			{
+				fprintf(stderr, "Invalid Packet start code prefix 0x%02X%02X%02X - skipping PES packet\n", pes[0], pes[1], pes[2]);
+			}
+			errors++;
 			return;
 		}
 		
 		/* Validate the stream ID */
 		if(pes[3] != 0xBD)
 		{
-			fprintf(stderr, "Invalid Stream id 0x%02X - skipping PES packet\n", pes[3]);
+			if(verbose >= 1)
+			{
+				fprintf(stderr, "Invalid Stream id 0x%02X - skipping PES packet\n", pes[3]);
+			}
+			errors++;
 			return;
 		}
 		
 		data = &pes[8 + pes[8] + 1];
 		data_len = ((pes[4] << 8) | pes[5]) - pes[8] - 3;
 		
-		if(verbose)
+		if(verbose >= 2)
 		{
 			fprintf(stderr, "data_len = %ld\n", data_len);
 			fprintf(stderr, "data_identifier: %02X\n", data[0]);
@@ -88,7 +97,11 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 		/* Validate the length */
 		if(data_len > pes_len)
 		{
-			fprintf(stderr, "Invalid PES Packet length: %ld\n", data_len);
+			if(verbose >= 1)
+			{
+				fprintf(stderr, "Invalid PES Packet length: %ld\n", data_len);
+			}
+			errors++;
 			return;
 		}
 		
@@ -99,7 +112,7 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 		{
 			int j;
 			
-			if(verbose)
+			if(verbose >= 2)
 			{
 				//fprintf(stderr, "(%ld)\n", data_len);
 				fprintf(stderr, "               data_unit_id: %d\n", data[0]);
@@ -194,7 +207,7 @@ int main(int argc, char *argv[])
 			break;
 		
 		case 'v': /* -v, --verbose */
-			verbose = 1;
+			verbose++;
 			break;
 		
 		case '?':
@@ -257,14 +270,18 @@ int main(int argc, char *argv[])
 				}
 				while(i == 188);
 
-				if(verbose)
+				if(verbose >= 1)
 				{
 					fprintf(stderr, "Skipped %d bytes\n", c);
 				}
 			}
 			else
 			{
-				fprintf(stderr, "Bad TS header\n");
+				if(verbose >= 1)
+				{
+					fprintf(stderr, "Bad TS header\n");
+				}
+				errors++;
 				fseek(fin, pad, SEEK_CUR);
 				continue;
 			}
@@ -282,11 +299,15 @@ int main(int argc, char *argv[])
 		
 		if(counter != 0xFF && counter != (pkt[3] & 0x0F))
 		{
-			fprintf(stderr, "Continuity counter interruption %d != %d\n", pkt[3] & 0x0F, counter);
+			if(verbose >= 1)
+			{
+				fprintf(stderr, "Continuity counter interruption %d != %d\n", pkt[3] & 0x0F, counter);
+			}
+			errors++;
 			pes_len = -1;
 		}
 		
-		if(verbose)
+		if(verbose >= 2)
 		{
 			/* Dump TS header */
 			fprintf(stderr, "    Transport error indicator (TEI): %d\n", (pkt[1] >> 7) & 1);
@@ -304,7 +325,7 @@ int main(int argc, char *argv[])
 		
 		if((pkt[3] >> 5) & 1)
 		{
-			if(verbose)
+			if(verbose >= 2)
 			{
 				/* Dump adaptation field */
 				fprintf(stderr, "             Adaptation field length: %d\n", payload[0]);
@@ -369,7 +390,7 @@ int main(int argc, char *argv[])
 		
 		counter = (pkt[3] + ((pkt[3] >> 4) & 1)) & 0x0F;
 		
-		if(verbose)
+		if(verbose >= 2)
 		{
 			fprintf(stderr, "\n");
 		}
@@ -383,7 +404,7 @@ int main(int argc, char *argv[])
 	fclose(fout);
 	fclose(fin);
 	
-	fprintf(stderr, "Dumped %d lines\n", olines);
+	fprintf(stderr, "Dumped %d lines (%d errors)\n", olines, errors);
 	
 	return(0);
 }
