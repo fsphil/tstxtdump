@@ -161,9 +161,7 @@ static void _print_usage(void)
 	        "  -p, --pid <number>             Select which PID to dump. Required.\n"
 	        "  -S, --skip <number>            Number of bytes to skip at the beginning of\n"
 		"                                 the file. Default: 0\n"
-		"  -P, --pad <number>             Number of bytes to skip after each packet. A\n"
-		"                                 negative value enables the header search.\n"
-		"                                 Defaut: -1\n"
+		"  -P, --pad <number>             Number of bytes to skip after each packet.\n"
 		"  -v, --verbose                  Enable verbose output.\n"
 	);
 }
@@ -177,7 +175,7 @@ int main(int argc, char *argv[])
 	uint8_t pes[1024 * 4];
 	uint16_t pid = 0;
 	int skip = 0;
-	int pad = -1;
+	int pad = 0;
 	ssize_t pes_len = -1;
 	int c;
 	int option_index;
@@ -228,6 +226,18 @@ int main(int argc, char *argv[])
 		return(-1);
 	}
 	
+	if(pad < 0)
+	{
+		fprintf(stderr, "Invalid pad count %d\n", pad);
+		return(-1);
+	}
+	
+	if(skip < 0)
+	{
+		fprintf(stderr, "Invalid skip count %d\n", skip);
+		return(-1);
+	}
+	
 	fprintf(stderr, "Dumping '%s' (PID 0x%X) > '%s'\n", argv[optind + 0], pid, argv[optind + 1]);
 	
 	fin = fopen(argv[optind + 0], "rb");
@@ -251,49 +261,33 @@ int main(int argc, char *argv[])
 	{
 		if(pkt[0] != 0x47)
 		{
-			if(pad < 0)
+			int i;
+			
+			c = 0;
+			
+			do
 			{
-				int i;
-				
-				c = 0;
-				
-				do
+				for(i = 0; i < 188; i++)
 				{
-					for(i = 0; i < 188; i++)
-					{
-						if(pkt[i] == 0x47) break;
-					}
-					
-					c += i;
-					memmove(pkt, &pkt[i], 188 - i);
-					fread(&pkt[188 - i], i, 1, fin);
+					if(pkt[i] == 0x47) break;
 				}
-				while(i == 188);
-
-				if(verbose >= 1)
-				{
-					fprintf(stderr, "Skipped %d bytes\n", c);
-				}
+				
+				c += i;
+				memmove(pkt, &pkt[i], 188 - i);
+				fread(&pkt[188 - i], i, 1, fin);
 			}
-			else
+			while(i == 188);
+			
+			if(verbose >= 1)
 			{
-				if(verbose >= 1)
-				{
-					fprintf(stderr, "Bad TS header\n");
-				}
-				errors++;
-				fseek(fin, pad, SEEK_CUR);
-				continue;
+				fprintf(stderr, "Skipped %d bytes\n", c);
 			}
 		}
 		
 		/* Skip PIDs we don't need */
 		if((((pkt[1] << 8) | pkt[2]) & 0x1FFF) != pid)
 		{
-			if(pad > 0)
-			{
-				fseek(fin, pad, SEEK_CUR);
-			}
+			fseek(fin, pad, SEEK_CUR);
 			continue;
 		}
 		
@@ -395,10 +389,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "\n");
 		}
 		
-		if(pad > 0)
-		{
-			fseek(fin, pad, SEEK_CUR);
-		}
+		fseek(fin, pad, SEEK_CUR);
 	}
 	
 	fclose(fout);
