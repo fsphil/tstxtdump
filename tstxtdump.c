@@ -39,7 +39,7 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 	const uint8_t *data;
 	size_t data_len;
 	
-	while(pes_len)
+	while(pes_len > 0)
 	{
 		if(verbose >= 2)
 		{
@@ -95,7 +95,7 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 		}
 		
 		/* Validate the length */
-		if(data_len > pes_len)
+		if(data_len <= 0 || data_len > pes_len)
 		{
 			if(verbose >= 1)
 			{
@@ -148,8 +148,9 @@ static void _parse_pes(const uint8_t *pes, size_t pes_len)
 			data += data[1] + 2;
 		}
 		
-		pes_len -= ((pes[4] << 8) | pes[5]) + 6;
-		pes += ((pes[4] << 8) | pes[5]) + 6;
+		data_len = ((pes[4] << 8) | pes[5]) + 6;
+		pes_len -= data_len;
+		pes += data_len;
 	}
 }
 
@@ -274,9 +275,20 @@ int main(int argc, char *argv[])
 				
 				c += i;
 				memmove(pkt, &pkt[i], 188 - i);
-				fread(&pkt[188 - i], i, 1, fin);
+				
+				if(fread(&pkt[188 - i], i, 1, fin) != 1)
+				{
+					i = -1;
+					break;
+				}
 			}
 			while(i == 188);
+			
+			if(i == -1)
+			{
+				/* EOF */
+				break;
+			}
 			
 			if(verbose >= 1)
 			{
